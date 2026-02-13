@@ -4,7 +4,8 @@ class Truck:
 
     def __init__(self, truck_id, start_time_minutes=8 * 60):
         self.id = truck_id
-        self.time = start_time_minutes  # minutes since midnight
+        self.time = float(start_time_minutes)  # minutes since midnight
+        self.start_time = float(start_time_minutes)
         self.location = "HUB"
         self.miles = 0.0
         self.packages = []
@@ -13,7 +14,7 @@ class Truck:
         if len(self.packages) >= Truck.MAX_PACKAGES:
             raise ValueError("Truck is full")
         self.packages.append(package)
-        package.truck_id = self.id
+        package.truck_id = self.id  # assign truck, do NOT change status here
 
     def drive_to(self, destination, distance_table):
         dist = distance_table.distance(self.location, destination)

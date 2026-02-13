@@ -1,11 +1,15 @@
 # Student ID: 010306042
 
 from hash_table import PackageStore
+from package import Package
 
-store = PackageStore()
-store.insert(1, {"name": "Test Package 1"})
-store.insert(2, {"name": "Test Package 2"})
+def main():
+    store = PackageStore()
 
-print(store.lookup(1))
-print(store.lookup(2))
-print(store.lookup(3))
+    p = Package(1, "123 Test St", "Test City", "00000", "EOD", 5)
+    store.insert(1, p)
+
+    print(store.lookup(1))
+
+if __name__ == "__main__":
+    main()

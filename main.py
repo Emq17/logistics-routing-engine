@@ -26,7 +26,7 @@ def minutes_to_ampm(total_minutes):
 def ampm_to_minutes(s):
     s = str(s).strip()
     if s.upper() == "EOD":
-        return 17 * 60
+        return 17 * 60  # treat as 5:00 PM
 
     parts = s.replace(".", "").split()
     if len(parts) != 2:
@@ -36,6 +36,39 @@ def ampm_to_minutes(s):
     hh, mm = time_part.split(":")
     hh = int(hh)
     mm = int(mm)
+
+    if suffix == "PM" and hh != 12:
+        hh += 12
+    if suffix == "AM" and hh == 12:
+        hh = 0
+
+    return hh * 60 + mm
+
+
+def parse_time_input(text):
+    t = str(text).strip()
+    if t.upper() == "EOD":
+        return 17 * 60
+
+    parts = t.replace(".", "").split()
+    if len(parts) != 2:
+        return None
+
+    time_part, suffix = parts[0], parts[1].upper()
+    if suffix not in ("AM", "PM"):
+        return None
+
+    if ":" not in time_part:
+        return None
+
+    hh_str, mm_str = time_part.split(":", 1)
+    if not (hh_str.isdigit() and mm_str.isdigit()):
+        return None
+
+    hh = int(hh_str)
+    mm = int(mm_str)
+    if hh < 1 or hh > 12 or mm < 0 or mm > 59:
+        return None
 
     if suffix == "PM" and hh != 12:
         hh += 12
@@ -86,6 +119,7 @@ def bundle_ids(packages):
 
 def assign_package(truck, p):
     truck.load(p)
+    p.depart_minutes = int(round(truck.start_time))
 
 
 def load_trucks(packages, t1, t2, t3):
@@ -125,7 +159,6 @@ def load_trucks(packages, t1, t2, t3):
             continue
 
         d = deadline_minutes(p)
-
         if d <= ampm_to_minutes("10:30 AM") and len(t1.packages) < Truck.MAX_PACKAGES:
             assign_package(t1, p)
             remaining.pop(p.id, None)
@@ -177,28 +210,15 @@ def nearest_next_address(current_loc, packages_on_truck, dt, all_packages, now_m
 
 def deliver_at_location(truck, dt, all_packages):
     here = truck.location
-    delivered_now = []
 
     for p in list(truck.packages):
         if p.address == here:
             p.mark_delivered(minutes_to_ampm(truck.time))
             p.delivered_minutes = int(round(truck.time))
-            delivered_now.append(p)
             truck.packages.remove(p)
-
-    return delivered_now
-
-
-def start_truck_route(truck):
-    depart = int(round(truck.time))
-    for p in truck.packages:
-        p.depart_minutes = depart
-        p.mark_en_route(truck.id)
 
 
 def run_route(truck, dt, all_packages):
-    start_truck_route(truck)
-
     while truck.packages:
         next_addr = nearest_next_address(truck.location, truck.packages, dt, all_packages, truck.time)
 
@@ -236,6 +256,26 @@ def print_all_packages(packages, check_minutes):
         print(f"{p.id:>2}: {st}{extra}{truck_txt} - {p.address}")
 
 
+def print_one_package(packages, package_id, check_minutes):
+    target = None
+    for p in packages:
+        if p.id == package_id:
+            target = p
+            break
+
+    if not target:
+        print("Package not found.")
+        return
+
+    st, t = status_at_time(target, check_minutes)
+    extra = f" @ {t}" if t else ""
+    truck_id = getattr(target, "truck_id", "")
+    truck_txt = f" (Truck {truck_id})" if truck_id else ""
+    print(f"{target.id}: {st}{extra}{truck_txt}")
+    print(f"Address: {target.address}, {target.city}, UT {target.zip}")
+    print(f"Deadline: {target.deadline} | Weight: {target.weight} | Notes: {target.note}")
+
+
 def print_truck_summary(truck):
     print(f"Truck {truck.id}:")
     print(f"Miles: {truck.miles:.1f}")
@@ -244,11 +284,9 @@ def print_truck_summary(truck):
     print("")
 
 
-def main():
+def build_and_run_simulation():
     packages = load_packages("data/packages.csv")
     dt = load_distances("data/distances.csv")
-
-    print("Loaded packages:", len(packages))
 
     t1 = Truck(1, start_time_minutes=8 * 60)
     t2 = Truck(2, start_time_minutes=9 * 60 + 5)
@@ -259,20 +297,69 @@ def main():
     run_route(t1, dt, packages)
     run_route(t2, dt, packages)
 
-    t3.time = max(t3.time, min(t1.time, t2.time))
+    t3.time = max(t3.time, t1.time)
     run_route(t3, dt, packages)
 
-    print_all_packages(packages, 8 * 60 + 45)
-    print_all_packages(packages, 9 * 60 + 45)
-    print_all_packages(packages, 12 * 60 + 30)
-
-    print("\n--- Truck summary ---")
-    print_truck_summary(t1)
-    print_truck_summary(t2)
-    print_truck_summary(t3)
-
     total = t1.miles + t2.miles + t3.miles
-    print(f"Total miles: {total:.1f}")
+    return packages, (t1, t2, t3), total
+
+
+def menu(packages, trucks, total_miles):
+    while True:
+        print("\nWGUPS Menu")
+        print("1) View ALL packages at a time")
+        print("2) Look up ONE package at a time")
+        print("3) View truck summary + total miles")
+        print("4) Print rubric snapshots (8:45, 9:45, 12:30)")
+        print("0) Exit")
+
+        choice = input("Select: ").strip()
+
+        if choice == "0":
+            break
+
+        if choice == "1":
+            t = input("Enter time (e.g., 9:45 AM) or EOD: ").strip()
+            minutes = parse_time_input(t)
+            if minutes is None:
+                print("Invalid time format.")
+                continue
+            print_all_packages(packages, minutes)
+
+        elif choice == "2":
+            pid_txt = input("Enter package ID (1-40): ").strip()
+            if not pid_txt.isdigit():
+                print("Invalid package ID.")
+                continue
+            pid = int(pid_txt)
+
+            t = input("Enter time (e.g., 10:15 AM) or EOD: ").strip()
+            minutes = parse_time_input(t)
+            if minutes is None:
+                print("Invalid time format.")
+                continue
+
+            print_one_package(packages, pid, minutes)
+
+        elif choice == "3":
+            print("\n--- Truck summary ---")
+            for tr in trucks:
+                print_truck_summary(tr)
+            print(f"Total miles: {total_miles:.1f}")
+
+        elif choice == "4":
+            print_all_packages(packages, 8 * 60 + 45)
+            print_all_packages(packages, 9 * 60 + 45)
+            print_all_packages(packages, 12 * 60 + 30)
+
+        else:
+            print("Invalid option.")
+
+
+def main():
+    packages, trucks, total = build_and_run_simulation()
+    print("Loaded packages:", len(packages))
+    menu(packages, trucks, total)
 
 
 if __name__ == "__main__":

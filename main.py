@@ -3,7 +3,7 @@
 from loader import load_packages, load_distances
 from truck import Truck
 
-
+# Time helpers (minutes to AM/PM strings)
 def minutes_to_ampm(total_minutes):
     total_minutes = int(round(total_minutes))
     h = (total_minutes // 60) % 24
@@ -77,7 +77,7 @@ def parse_time_input(text):
 
     return hh * 60 + mm
 
-
+# Constraint parsing helpers (notes/bundles/special rules)
 def parse_ints(text):
     nums = []
     cur = ""
@@ -116,7 +116,7 @@ def bundle_ids(packages):
 
     return bundles
 
-
+# Truck loading
 def assign_package(truck, p):
     truck.load(p)
     p.depart_minutes = int(round(truck.start_time))
@@ -175,7 +175,7 @@ def load_trucks(packages, t1, t2, t3):
             assign_package(t3, p)
             remaining.pop(p.id, None)
 
-
+# Package 9 correction (address updated at 10:20 AM)
 def correct_package_9(packages, now_minutes):
     if now_minutes < (10 * 60 + 20):
         return
@@ -187,7 +187,7 @@ def correct_package_9(packages, now_minutes):
             p.zip = "84111"
             return
 
-
+#Nearest neighbor routing
 def nearest_next_address(current_loc, packages_on_truck, dt, all_packages, now_minutes):
     correct_package_9(all_packages, now_minutes)
 
@@ -232,7 +232,7 @@ def run_route(truck, dt, all_packages):
 
     truck.return_to_hub(dt)
 
-
+#Reporting + status checks
 def status_at_time(p, check_minutes):
     delivered_minutes = getattr(p, "delivered_minutes", None)
     depart_minutes = getattr(p, "depart_minutes", None)
@@ -283,7 +283,7 @@ def print_truck_summary(truck):
     print(f"End location: {truck.location}")
     print("")
 
-
+# Main simulation entry point
 def build_and_run_simulation():
     packages = load_packages("data/packages.csv")
     dt = load_distances("data/distances.csv")
@@ -303,7 +303,7 @@ def build_and_run_simulation():
     total = t1.miles + t2.miles + t3.miles
     return packages, (t1, t2, t3), total
 
-
+# Simple CLI loop for user interaction
 def menu(packages, trucks, total_miles):
     while True:
         print("\nWGUPS Menu")

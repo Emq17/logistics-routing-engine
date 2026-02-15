@@ -4,12 +4,14 @@ from distance import DistanceTable
 
 
 def load_packages(path):
+    # Load packages data from packages.csv into a list of Package objects
     packages = []
 
     with open(path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
 
         for row in reader:
+            # Pull fileds by header name (keeps the loader resilient to column order)
             package_id = int(row["Package ID"])
             address = row["Address"].strip()
             city = row["City"].strip()
@@ -18,6 +20,7 @@ def load_packages(path):
             weight = str(row["Weight (Kgs)"]).strip()
             note = row.get("Special Notes", "").strip()
 
+            # Store everything in a Package object so status/time can be updated later
             packages.append(
                 Package(package_id, address, city, zip_code, deadline, weight, note)
             )
@@ -26,6 +29,8 @@ def load_packages(path):
 
 
 def _to_float(value):
+    # Convert a distance cell into a float
+    # Empty cells in the CSV become None (spreadsheet formatted only half filled)
     if value is None:
         return None
 
@@ -40,6 +45,7 @@ def _to_float(value):
 
 
 def _clean_location(text):
+    # Normalize location strings so they match across packages + distance table
     if text is None:
         return ""
 
@@ -55,6 +61,7 @@ def _clean_location(text):
 
 
 def load_distances(path):
+    # Load distance table CSV into a DistanceTable object (locations + 2D matrix)
     rows = []
 
     with open(path, newline="", encoding="utf-8-sig") as f:
@@ -73,7 +80,6 @@ def load_distances(path):
     matrix = []
 
     for r in data_rows:
-        # Column B (index 1) is usually the address label in the distance table export
         raw_loc = r[1] if len(r) > 1 else r[0]
         loc = _clean_location(raw_loc)
 

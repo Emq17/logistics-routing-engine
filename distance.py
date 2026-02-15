@@ -1,14 +1,16 @@
 class DistanceTable:
     def __init__(self, locations, matrix):
+        # locations = list of address strings
+        # matrix = 2D list of distances
         self.locations = locations
         self.matrix = matrix
-        self.index = {loc: i for i, loc in enumerate(locations)}
+        self.index = {loc: i for i, loc in enumerate(locations)} 
 
     def _clean(self, text):
         if text is None:
             return ""
 
-        s = str(text).replace("\n", " ").strip()
+        s = str(text).replace("\n", " ").strip() # Remove line breaks and trim whitespace
 
         # Treat the hub consistently
         if s.upper() == "HUB":
@@ -23,9 +25,11 @@ class DistanceTable:
         return s
 
     def distance(self, from_loc, to_loc):
+        # Return the distance between two locations using the provided matrix
         a = self._clean(from_loc)
         b = self._clean(to_loc)
 
+        # Same location means zero travel
         if a == b:
             return 0.0
 

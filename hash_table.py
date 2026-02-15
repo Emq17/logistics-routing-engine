@@ -1,4 +1,3 @@
-# Simple hash table for packages using separate chaining
 # Key: package_id (int) - Value: package object
 
 class PackageStore:

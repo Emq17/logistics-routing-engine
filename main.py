@@ -93,6 +93,24 @@ def parse_ints(text):
     return nums
 
 
+def available_at_minutes(p):
+    note = str(getattr(p, "note", "")).lower()
+    if "will not arrive to depot until" not in note:
+        return 8 * 60
+
+    nums = parse_ints(note)
+    if len(nums) >= 2:
+        hh, mm = nums[0], nums[1]
+        if 1 <= hh <= 12 and 0 <= mm <= 59:
+            if "pm" in note and hh != 12:
+                hh += 12
+            if "am" in note and hh == 12:
+                hh = 0
+            return hh * 60 + mm
+
+    return 9 * 60 + 5
+
+
 def is_truck2_only(p):
     return "truck 2" in str(getattr(p, "note", "")).lower()
 
@@ -119,7 +137,19 @@ def bundle_ids(packages):
 # Truck loading
 def assign_package(truck, p):
     truck.load(p)
-    p.depart_minutes = int(round(truck.start_time))
+    p.depart_minutes = int(round(max(truck.start_time, available_at_minutes(p))))
+
+
+def can_assign_to_truck(p, truck):
+    return available_at_minutes(p) <= truck.start_time and len(truck.packages) < Truck.MAX_PACKAGES
+
+
+def assign_first_eligible(p, trucks):
+    for tr in trucks:
+        if can_assign_to_truck(p, tr):
+            assign_package(tr, p)
+            return True
+    return False
 
 
 def load_trucks(packages, t1, t2, t3):
@@ -127,7 +157,14 @@ def load_trucks(packages, t1, t2, t3):
 
     for pid in list(remaining.keys()):
         p = remaining[pid]
-        if is_truck2_only(p) and len(t2.packages) < Truck.MAX_PACKAGES:
+        if available_at_minutes(p) > (8 * 60):
+            if can_assign_to_truck(p, t2):
+                assign_package(t2, p)
+                remaining.pop(pid, None)
+
+    for pid in list(remaining.keys()):
+        p = remaining[pid]
+        if is_truck2_only(p) and can_assign_to_truck(p, t2):
             assign_package(t2, p)
             remaining.pop(pid, None)
 
@@ -141,7 +178,9 @@ def load_trucks(packages, t1, t2, t3):
         if any(is_truck2_only(x) for x in group_pkgs):
             target = t2
 
-        if len(target.packages) + len(group_pkgs) <= Truck.MAX_PACKAGES:
+        if len(target.packages) + len(group_pkgs) <= Truck.MAX_PACKAGES and all(
+            available_at_minutes(x) <= target.start_time for x in group_pkgs
+        ):
             for p in group_pkgs:
                 assign_package(target, p)
                 remaining.pop(p.id, None)
@@ -159,20 +198,20 @@ def load_trucks(packages, t1, t2, t3):
             continue
 
         d = deadline_minutes(p)
-        if d <= ampm_to_minutes("10:30 AM") and len(t1.packages) < Truck.MAX_PACKAGES:
-            assign_package(t1, p)
+        if d <= ampm_to_minutes("10:30 AM"):
+            if assign_first_eligible(p, [t1, t2, t3]):
+                remaining.pop(p.id, None)
+
+    if 9 in remaining and can_assign_to_truck(remaining[9], t3):
+        assign_package(t3, remaining[9])
+        remaining.pop(9, None)
+
+    for p in list(remaining.values()):
+        if assign_first_eligible(p, [t2, t1, t3]):
             remaining.pop(p.id, None)
 
     for p in list(remaining.values()):
-        if p.id == 9:
-            continue
-        if len(t2.packages) < Truck.MAX_PACKAGES:
-            assign_package(t2, p)
-            remaining.pop(p.id, None)
-
-    for p in list(remaining.values()):
-        if len(t3.packages) < Truck.MAX_PACKAGES:
-            assign_package(t3, p)
+        if assign_first_eligible(p, [t3, t2, t1]):
             remaining.pop(p.id, None)
 
 # Package 9 correction (address updated at 10:20 AM)
@@ -186,6 +225,12 @@ def correct_package_9(packages, now_minutes):
             p.city = "Salt Lake City"
             p.zip = "84111"
             return
+
+
+def address_for_time(p, check_minutes):
+    if p.id == 9 and check_minutes < (10 * 60 + 20):
+        return f"{p.original_address}, {p.original_city}, UT {p.original_zip}"
+    return f"{p.address}, {p.city}, UT {p.zip}"
 
 #Nearest neighbor routing
 def nearest_next_address(current_loc, packages_on_truck, dt, all_packages, now_minutes):
@@ -250,10 +295,14 @@ def print_all_packages(packages, check_minutes):
     print(f"\n--- Package status at {minutes_to_ampm(check_minutes)} ---")
     for p in sorted(packages, key=lambda x: x.id):
         st, t = status_at_time(p, check_minutes)
-        extra = f" @ {t}" if t else ""
+        delivery_txt = t if t else "-"
         truck_id = getattr(p, "truck_id", "")
-        truck_txt = f" (Truck {truck_id})" if truck_id else ""
-        print(f"{p.id:>2}: {st}{extra}{truck_txt} - {p.address}")
+        truck_txt = str(truck_id) if truck_id else "-"
+        addr = address_for_time(p, check_minutes)
+        print(
+            f"{p.id:>2} | {st:<9} | Addr: {addr} | Deadline: {p.deadline:<8} | "
+            f"Truck: {truck_txt} | Delivery: {delivery_txt}"
+        )
 
 
 def print_one_package(packages, package_id, check_minutes):
@@ -268,11 +317,11 @@ def print_one_package(packages, package_id, check_minutes):
         return
 
     st, t = status_at_time(target, check_minutes)
-    extra = f" @ {t}" if t else ""
+    delivery_txt = t if t else "-"
     truck_id = getattr(target, "truck_id", "")
     truck_txt = f" (Truck {truck_id})" if truck_id else ""
-    print(f"{target.id}: {st}{extra}{truck_txt}")
-    print(f"Address: {target.address}, {target.city}, UT {target.zip}")
+    print(f"{target.id}: {st} | Delivery time: {delivery_txt}{truck_txt}")
+    print(f"Address: {address_for_time(target, check_minutes)}")
     print(f"Deadline: {target.deadline} | Weight: {target.weight} | Notes: {target.note}")
 
 
@@ -286,6 +335,10 @@ def print_truck_summary(truck):
 # Main simulation entry point
 def build_and_run_simulation():
     packages = load_packages("data/packages.csv")
+    for p in packages:
+        p.original_address = p.address
+        p.original_city = p.city
+        p.original_zip = p.zip
     dt = load_distances("data/distances.csv")
 
     t1 = Truck(1, start_time_minutes=8 * 60)

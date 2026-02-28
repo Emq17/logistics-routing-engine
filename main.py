@@ -305,7 +305,7 @@ def print_all_packages(packages, check_minutes):
         addr = address_for_time(p, check_minutes)
         print(
             f"{p.id:>2} | {st:<9} | Addr: {addr} | Deadline: {p.deadline:<8} | "
-            f"Truck: {truck_txt} | Delivery: {delivery_txt}"
+            f"Weight: {p.weight} kgs | Truck: {truck_txt} | Delivery: {delivery_txt}"
         )
 
 

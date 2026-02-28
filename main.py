@@ -281,9 +281,13 @@ def run_route(truck, dt, all_packages):
 def status_at_time(p, check_minutes):
     delivered_minutes = getattr(p, "delivered_minutes", None)
     depart_minutes = getattr(p, "depart_minutes", None)
+    available_minutes = available_at_minutes(p)
 
     if delivered_minutes is not None and delivered_minutes <= check_minutes:
         return "Delivered", minutes_to_ampm(delivered_minutes)
+
+    if available_minutes > (8 * 60) and check_minutes < available_minutes:
+        return "DELAYED", ""
 
     if depart_minutes is not None and depart_minutes <= check_minutes:
         return "En route", ""

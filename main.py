@@ -367,7 +367,6 @@ def menu(packages, trucks, total_miles):
         print("1) View ALL packages at a time")
         print("2) Look up ONE package at a time")
         print("3) View truck summary + total miles")
-        print("4) Print rubric snapshots (8:45, 9:45, 12:30)")
         print("0) Exit")
 
         choice = input("Select: ").strip()
@@ -403,11 +402,6 @@ def menu(packages, trucks, total_miles):
             for tr in trucks:
                 print_truck_summary(tr)
             print(f"Total miles: {total_miles:.1f}")
-
-        elif choice == "4":
-            print_all_packages(packages, 8 * 60 + 45)
-            print_all_packages(packages, 9 * 60 + 45)
-            print_all_packages(packages, 12 * 60 + 30)
 
         else:
             print("Invalid option.")
